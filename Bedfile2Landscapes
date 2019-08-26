@@ -1,0 +1,109 @@
+# Bat1K Landscapes
+# Jenna R. Grimshaw
+# August 11, 2019
+# jenna.grimshaw@ttu.edu
+
+# This script will take bedfiles and reformat them as follows:
+# Column 1: Scaffold
+# Column 2: TE
+# Column 3: Size
+# Column 4: Divergence
+
+# Arguments: input rm.bed file
+# Arguments: How we determine what we are interested input
+# Arguments: Output folder - Do we want to create a new directory?
+
+#############################################
+############## Import modules ###############
+#############################################
+import logging
+import pandas as pd
+import matplotlib as mlab
+import matplotlib.pyplot as plt
+import numpy as np
+
+##############################################
+################## Functions #################
+##############################################
+
+def SUMofSIZE(data, family, min, max):
+	size = []
+	for DIV, SIZE, FAMILY in zip(data.Divergence, data.Size, data.Family):
+		if FAMILY == family:
+			if DIV >= min and DIV < max:
+				size.append(SIZE)
+	return sum(size)
+	
+# This function will add up the lengths/sizes 
+# of TEs within a min and max Divergence
+# and then will return the sum of those lengths
+
+################################################
+################################################
+################################################
+
+# Enter genome size
+genomesize = 390758124
+
+# Import Rm_bed file
+fields = ["Scaffold", "Start", "Stop", "TE", "Score", "Orientation", "Class", "Family", "Divergence"]
+file = pd.read_csv("aVan_rm.bed", sep="\t", names=fields)
+print(file.head())
+
+# We are only interested in SINEs
+# So create a new dataframe only using SINEs
+# Calculate length, drop unneeded columns
+# And reorder the columns
+SINE = file[file.Class =="SINE"]
+SINE["Size"] = SINE["Stop"] - SINE["Start"]
+SINE=SINE.drop(["Start", "Stop", "Score", "Class", "Orientation"], axis=1)
+SINE = SINE[["Scaffold", "TE", "Size", "Family","Divergence"]]
+print(SINE.head())
+
+# Find unique families
+familyLIST = (SINE["Family"].unique())
+print("family list:", familyLIST)
+
+# Create dataframe to be used in loopfile
+# I want one column with ranges of divergences
+# Starting at 0 to 0.50 by increments of 0.01
+loopfile = pd.DataFrame(columns = familyLIST)
+loopfile["series"] = range(51)
+loopfile["Range"] = loopfile["series"]/100
+loopfile = loopfile.drop("series", 1)
+
+# Run the program
+for family in familyLIST:	# for every family
+	min = 0					# Start at 0 min divergence
+	data = []				# Empty list to be used in loop
+	for element in loopfile.Range:	# For each value in Range
+		if element == min/100:		# if value matches min/100
+			start = min/100			# Make min/100 the start divergence
+			sizesum = SUMofSIZE(SINE, family, start, start+0.01) # run function
+			data.append(sizesum/genomesize) # Append the sum/genome size to get proportion
+			min += 1		# Increase minimum by 1
+	print(data)
+	loopfile[family] = data # For that family, append the data to loopfile
+	print(loopfile)
+
+
+# Creating stacked barplot
+y_pos = np.arange(len(loopfile.Range))	#Setting up barplot
+p1 = plt.bar(y_pos, loopfile.metulj)	# Plot metulj
+p2 = plt.bar(y_pos, loopfile.ZenoSINE)	# Plot ZenoSINE
+plt.show()
+
+# Multiple line plots - same yaxis
+plt.plot(loopfile.Range, loopfile.ZenoSINE)
+plt.plot(loopfile.Range, loopfile.metulj)
+plt.show()
+
+# Double y-axis
+fig, ax1 = plt.subplots()
+ax2 = ax1.twinx()
+ax1.plot(loopfile.Range, loopfile.ZenoSINE, "g-")
+ax2.plot(loopfile.Range, loopfile.metulj, "b-")
+ax1.set_xlabel("Divergence")
+ax1.set_ylabel("ZenoSINE", color="g")
+ax2.set_ylabel("metulj", color="b")
+plt.show()
